@@ -3,6 +3,8 @@ package com.chenyu;
 
 import java.io.File;
 import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Logger;
 
 /**
  * 文件读取线程
@@ -13,6 +15,7 @@ import java.util.Queue;
  **/
 public class MyFileReader implements Runnable {
 
+    private Logger logger = Logger.getLogger("MyFileReader");
     /**
      * 基础遍历路径
      */
@@ -20,24 +23,19 @@ public class MyFileReader implements Runnable {
     /**
      * 文件队列
      */
-    private Queue<MyFile> fileContainer;
+    private LinkedBlockingQueue<MyFile> fileReaderQueue;
 
-    private boolean finish = false;
 
-    public boolean isFinish() {
-        return finish;
-    }
-
-    public MyFileReader(String basePath, Queue<MyFile> fileContainer) {
+    public MyFileReader(String basePath, LinkedBlockingQueue<MyFile> fileReaderQueue) {
         this.basePath = basePath;
-        this.fileContainer = fileContainer;
+        this.fileReaderQueue = fileReaderQueue;
     }
 
     @Override
     public void run() {
+
         File file = new File(basePath);
         readFile(file);
-        finish = true;
     }
 
     /**
@@ -56,8 +54,11 @@ public class MyFileReader implements Runnable {
         } else {
             MyFile myFile = new MyFile("", file);
             //否则就将文件加入队列
-            System.out.println("读取线程读取文件：" + file.getName());
-            fileContainer.offer(myFile);
+            try {
+                fileReaderQueue.put(myFile);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
     }

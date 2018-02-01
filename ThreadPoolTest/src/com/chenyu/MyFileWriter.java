@@ -2,6 +2,8 @@ package com.chenyu;
 
 import java.io.File;
 import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Logger;
 
 /**
  * 文件输出线程
@@ -11,37 +13,33 @@ import java.util.Queue;
  **/
 public class MyFileWriter implements Runnable {
 
+    private Logger logger = Logger.getLogger("MyFileWriter");
     /**
      * 文件队列
      */
-    private Queue<MyFile> fileMd5Queue;
+    private LinkedBlockingQueue<MyFile> fileMd5Queue;
 
-    /**
-     * 线程停止的标记
-     */
-    private boolean flag = true;
-
-
-    public void setFlag(boolean flag) {
-        this.flag = flag;
-    }
-
-    public MyFileWriter(Queue<MyFile> fileMd5Queue) {
+    public MyFileWriter(LinkedBlockingQueue<MyFile> fileMd5Queue) {
         this.fileMd5Queue = fileMd5Queue;
     }
 
     @Override
     public void run() {
-        while (flag) {
+        while (true) {
             writeFile();
         }
     }
 
     private void writeFile() {
         //取出一个元素
-        MyFile file = fileMd5Queue.poll();
+        MyFile file = null;
+        try {
+            file = fileMd5Queue.take();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         if (file != null) {
-            System.out.println("file=" + file.getFile().getAbsolutePath() + ",MD5=" + file.getMd5());
+            logger.info(String.format("[%s]file=%s,md5=%s", Thread.currentThread().getName(), file.getFile().getAbsolutePath(), file.getMd5()));
         }
     }
 }

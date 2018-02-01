@@ -1,10 +1,7 @@
 package com.chenyu;
 
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * 客户端调用
@@ -17,37 +14,24 @@ public class Client {
     /**
      * 核心线程数
      */
-    private static final int CORE_POOL_SIZE = 8;
+    private static final int FILE_FILTER_THREAD_NUM = 12;
 
-    /**
-     * 最大线程数
-     */
-    private static final int maximumPoolSize = 32;
-
-    /**
-     * 线程空闲状态下存活时间
-     */
-    private static final int keepAliveTime = 1;
-
-    /**
-     * 时间的单位
-     */
-    private static final TimeUnit timeUnit = TimeUnit.SECONDS;
+    private static final int FILE_MD5_THREAD_NUM = 2;
 
 
-    private static final String BASE_PATH = "C:\\Windows\\Branding";
+    private static final String BASE_PATH = "C:\\Windows\\system32";
     /**
      * 主队列进行文件的读取
      */
-    private Queue<MyFile> myFileQueue = new LinkedBlockingQueue<>();
+    private LinkedBlockingQueue<MyFile> fileReaderQueue = new LinkedBlockingQueue<>();
     /**
      * 进行文件过滤的队列
      */
-    private Queue<MyFile> fileFilterQueue = new LinkedBlockingQueue<>();
+    private LinkedBlockingQueue<MyFile> fileFilterQueue = new LinkedBlockingQueue<>();
     /**
      * 对文件进行Md5加密的队列
      */
-    private Queue<MyFile> fileMd5Queue = new LinkedBlockingQueue<>();
+    private LinkedBlockingQueue<MyFile> fileMd5Queue = new LinkedBlockingQueue<>();
 
 
     public static void main(String[] args) {
@@ -60,85 +44,49 @@ public class Client {
      */
     private static void doMyFileTask() {
         Client client = new Client();
-        MyFileReader myFileReader = client.startFileReaderThread();
-        ThreadPoolExecutor filterThreadPool = client.startFileFilterThreadPool();
-        ThreadPoolExecutor md5ThreadPool = client.startFileMd5ThreadPool();
-        MyFileWriter myFileWriter = client.startFileWriterThread();
-
-        while (true) {
-            if (myFileReader.isFinish()) {
-                System.out.println("文件读取完毕");
-                break;
-            }
-            //当文件读取没有完毕时main线程一直阻塞
-        }
-        filterThreadPool.shutdown();
-        md5ThreadPool.shutdown();
-        //myFileWriter.setFlag(false);
-        /*while (true) {
-            System.out.println("判断文件过滤线程池");
-            if (filterThreadPool.isTerminated()) {
-                System.out.println("文件过滤线程执行完毕");
-                break;
-            }
-            //判断是否过滤的线程池已经完毕
-        }
-        md5ThreadPool.shutdown();
-        while (true) {
-            System.out.println("判断md5线程池线程池");
-            if (md5ThreadPool.isTerminated()) {
-                System.out.println("md5线程池执行完毕");
-                myFileWriter.setFlag(false);
-                break;
-            }
-            //判断是否过滤的线程池已经完毕
-        }*/
-
+        client.startFileFilterThreadPool();
+        client.startFileMd5ThreadPool();
+        client.startFileWriterThread();
+        client.startFileReaderThread();
     }
 
 
     /**
      * 开启文件读取的线程
      */
-    private MyFileReader startFileReaderThread() {
-        MyFileReader myFileReader = new MyFileReader(BASE_PATH, myFileQueue);
-        Thread thread = new Thread(myFileReader, "fileReaderThread");
+    private void startFileReaderThread() {
+        MyFileReader myFileReader = new MyFileReader(BASE_PATH, fileReaderQueue);
+        Thread thread = new Thread(myFileReader);
         thread.start();
-        return myFileReader;
     }
 
     /**
      * 开启文件过滤的线程池
      */
-    private ThreadPoolExecutor startFileFilterThreadPool() {
-        BlockingQueue<Runnable> blockingQueue = new LinkedBlockingQueue<>();
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(CORE_POOL_SIZE, maximumPoolSize, keepAliveTime, timeUnit, blockingQueue);
-        for (int i = 0; i < 1000; i++) {
-            MyFileFilter fileFilter = new MyFileFilter(myFileQueue, fileFilterQueue,i);
+    private void startFileFilterThreadPool() {
+        ExecutorService executor = Executors.newFixedThreadPool(FILE_FILTER_THREAD_NUM);
+        for (int i = 0; i < FILE_FILTER_THREAD_NUM; i++) {
+            MyFileFilter fileFilter = new MyFileFilter(fileReaderQueue, fileFilterQueue);
             executor.execute(fileFilter);
         }
-        return executor;
     }
 
     /**
      * 开启文件过滤的线程池
      */
-    private ThreadPoolExecutor startFileMd5ThreadPool() {
-        BlockingQueue<Runnable> blockingQueue = new LinkedBlockingQueue<>();
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(CORE_POOL_SIZE, maximumPoolSize, keepAliveTime, timeUnit, blockingQueue);
-        for (int i = 0; i < 1000; i++) {
+    private void startFileMd5ThreadPool() {
+        ExecutorService executor = Executors.newFixedThreadPool(FILE_MD5_THREAD_NUM);
+        for (int i = 0; i < FILE_MD5_THREAD_NUM; i++) {
             MyFileMd5 fileMd5 = new MyFileMd5(fileFilterQueue, fileMd5Queue);
             executor.execute(fileMd5);
         }
-        return executor;
     }
 
 
-    private MyFileWriter startFileWriterThread() {
+    private void startFileWriterThread() {
         MyFileWriter myFileWriter = new MyFileWriter(fileMd5Queue);
         Thread thread = new Thread(myFileWriter);
         thread.start();
-        return myFileWriter;
     }
 
 }
